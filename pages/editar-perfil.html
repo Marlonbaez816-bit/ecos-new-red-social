@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecos - Editar Perfil</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .preview-avatar { width:100px; height:100px; border-radius:50%; object-fit:cover; border:3px solid var(--primary); margin:10px auto; display:block; }
+        .preview-cover { width:100%; height:150px; border-radius:12px; object-fit:cover; margin:10px 0; }
+        .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:14px 28px; border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer; transition:all 0.3s; }
+        .btn-primary { background:linear-gradient(135deg,#007AFF,#5856D6); color:#fff; }
+        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(0,122,255,0.3); }
+        .btn-block { width:100%; }
+        .btn-danger { background:#FF3B30; color:#fff; }
+        .btn-danger:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(255,59,48,0.3); }
+        .char-counter { text-align:right; font-size:12px; color:var(--text-tertiary); }
+        .char-counter.limit { color:var(--danger); }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">🌿 Ecos</div>
+        <div class="nav-links"><a href="perfil.html" style="color:var(--text-secondary);text-decoration:none;">← Volver</a></div>
+    </nav>
+
+    <div class="container" style="max-width:500px;padding:20px 16px;">
+        <h2>✏️ Editar Perfil</h2>
+        <p style="color:var(--text-tertiary);margin-bottom:20px;">Actualiza tu información personal</p>
+
+        <form id="perfilForm">
+            <div class="input-group">
+                <label>Foto de portada</label>
+                <input type="file" class="input" id="coverFile" accept="image/*" style="padding:8px;">
+                <img class="preview-cover" id="coverPreview" style="display:none;">
+            </div>
+
+            <div class="input-group">
+                <label>Foto de perfil</label>
+                <input type="file" class="input" id="avatarFile" accept="image/*" style="padding:8px;">
+                <img class="preview-avatar" id="avatarPreview" style="display:none;">
+            </div>
+
+            <div class="input-group">
+                <label>Nombre</label>
+                <input type="text" class="input" id="nombre" placeholder="Tu nombre" maxlength="50">
+            </div>
+
+            <div class="input-group">
+                <label>Nombre de usuario</label>
+                <input type="text" class="input" id="username" placeholder="@usuario" maxlength="20" required>
+                <div class="char-counter" id="usernameCounter">0/20</div>
+            </div>
+
+            <div class="input-group">
+                <label>Biografía</label>
+                <textarea class="input" id="bio" placeholder="Cuéntanos sobre ti" rows="3" maxlength="160"></textarea>
+                <div class="char-counter" id="bioCounter">0/160</div>
+            </div>
+
+            <div class="input-group">
+                <label>Ubicación</label>
+                <input type="text" class="input" id="ubicacion" placeholder="Ciudad, País" maxlength="50">
+            </div>
+
+            <div class="input-group">
+                <label>Sitio web</label>
+                <input type="url" class="input" id="website" placeholder="https://tusitio.com" maxlength="100">
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="submitBtn">💾 Guardar cambios</button>
+        </form>
+
+        <div style="margin-top:16px;">
+            <button class="btn btn-danger btn-block" id="deleteAccountBtn" style="background:#FF3B30;color:#fff;">🗑️ Eliminar cuenta</button>
+        </div>
+
+        <div id="result" style="margin-top:16px;"></div>
+    </div>
+
+    <script type="importmap">{"imports":{"@supabase/supabase-js":"https://esm.sh/@supabase/supabase-js@2"}}</script>
+    <script type="module">
+        import { createClient } from '@supabase/supabase-js';
+        const supabaseAuth = createClient('https://ecos-auth.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtYXV0aCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY3LCJleHAiOjIwMzQ4MDU0Njd9.ejemploClaveAuth1234567890');
+        const supabaseContent = createClient('https://ecos-content.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtY29udGVudCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY4LCJleHAiOjIwMzQ4MDU0Njh9.ejemploClaveContent1234567890');
+
+        const form = document.getElementById('perfilForm');
+        const result = document.getElementById('result');
+        const submitBtn = document.getElementById('submitBtn');
+        const username = document.getElementById('username');
+        const bio = document.getElementById('bio');
+
+        document.getElementById('usernameCounter').textContent = '0/20';
+        document.getElementById('bioCounter').textContent = '0/160';
+
+        username.addEventListener('input', () => {
+            document.getElementById('usernameCounter').textContent = `${username.value.length}/20`;
+        });
+        bio.addEventListener('input', () => {
+            document.getElementById('bioCounter').textContent = `${bio.value.length}/160`;
+        });
+
+        const { data: { session } } = await supabaseAuth.auth.getSession();
+        if (!session) window.location.href = 'login.html';
+
+        // Cargar perfil actual
+        const { data: profile } = await supabaseAuth.from('perfiles').select('*').eq('id', session.user.id).single();
+        if (profile) {
+            document.getElementById('nombre').value = profile.nombre || '';
+            document.getElementById('username').value = profile.username || '';
+            document.getElementById('bio').value = profile.bio || '';
+            document.getElementById('ubicacion').value = profile.ubicacion || '';
+            document.getElementById('website').value = profile.website || '';
+            if (profile.avatar_url) {
+                const img = document.getElementById('avatarPreview');
+                img.src = profile.avatar_url;
+                img.style.display = 'block';
+            }
+            if (profile.portada_url) {
+                const img = document.getElementById('coverPreview');
+                img.src = profile.portada_url;
+                img.style.display = 'block';
+            }
+        }
+
+        // Previsualizar avatar
+        document.getElementById('avatarFile').addEventListener('change', () => {
+            const file = document.getElementById('avatarFile').files[0];
+            if (file) {
+                const img = document.getElementById('avatarPreview');
+                img.src = URL.createObjectURL(file);
+                img.style.display = 'block';
+            }
+        });
+
+        // Previsualizar portada
+        document.getElementById('coverFile').addEventListener('change', () => {
+            const file = document.getElementById('coverFile').files[0];
+            if (file) {
+                const img = document.getElementById('coverPreview');
+                img.src = URL.createObjectURL(file);
+                img.style.display = 'block';
+            }
+        });
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Guardando...';
+            result.innerHTML = '';
+
+            try {
+                const nombre = document.getElementById('nombre').value;
+                const usernameVal = document.getElementById('username').value;
+                const bioVal = document.getElementById('bio').value;
+                const ubicacion = document.getElementById('ubicacion').value;
+                const website = document.getElementById('website').value;
+                const avatarFile = document.getElementById('avatarFile').files[0];
+                const coverFile = document.getElementById('coverFile').files[0];
+
+                let avatar_url = profile?.avatar_url || null;
+                let portada_url = profile?.portada_url || null;
+
+                if (avatarFile) {
+                    const fileName = `avatars/${session.user.id}_${Date.now()}.jpg`;
+                    const { error } = await supabaseContent.storage.from('avatars').upload(fileName, avatarFile);
+                    if (!error) {
+                        const { data: { publicUrl } } = supabaseContent.storage.from('avatars').getPublicUrl(fileName);
+                        avatar_url = publicUrl;
+                    }
+                }
+
+                if (coverFile) {
+                    const fileName = `portadas/${session.user.id}_${Date.now()}.jpg`;
+                    const { error } = await supabaseContent.storage.from('portadas').upload(fileName, coverFile);
+                    if (!error) {
+                        const { data: { publicUrl } } = supabaseContent.storage.from('portadas').getPublicUrl(fileName);
+                        portada_url = publicUrl;
+                    }
+                }
+
+                const { error } = await supabaseAuth.from('perfiles').upsert({
+                    id: session.user.id,
+                    nombre: nombre,
+                    username: usernameVal,
+                    bio: bioVal,
+                    ubicacion: ubicacion,
+                    website: website,
+                    avatar_url: avatar_url,
+                    portada_url: portada_url,
+                    updated_at: new Date()
+                });
+
+                if (error) throw new Error(error.message);
+
+                result.innerHTML = '<div style="background:rgba(52,199,89,0.1);padding:16px;border-radius:12px;color:var(--success);">✅ Perfil actualizado correctamente</div>';
+                setTimeout(() => window.location.href = 'perfil.html', 1500);
+            } catch (err) {
+                result.innerHTML = `<p style="color:var(--danger);">❌ ${err.message}</p>`;
+            }
+            submitBtn.disabled = false;
+            submitBtn.textContent = '💾 Guardar cambios';
+        };
+
+        // Eliminar cuenta
+        document.getElementById('deleteAccountBtn').onclick = async () => {
+            if (!confirm('⚠️ ¿Estás seguro? Esta acción no se puede deshacer. Se eliminarán todos tus datos.')) return;
+            if (!confirm('¿Realmente quieres eliminar tu cuenta de Ecos?')) return;
+            try {
+                await supabaseAuth.from('perfiles').delete().eq('id', session.user.id);
+                await supabaseAuth.auth.admin.deleteUser(session.user.id);
+                await supabaseAuth.auth.signOut();
+                alert('Cuenta eliminada');
+                window.location.href = 'login.html';
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecos - Post</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .comment-item { display:flex; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border-color); }
+        .comment-item .avatar { width:36px; height:36px; border-radius:50%; object-fit:cover; }
+        .comment-item .content { flex:1; }
+        .comment-item .content .name { font-weight:600; font-size:14px; }
+        .comment-item .content .text { font-size:14px; margin:4px 0; }
+        .comment-item .content .time { font-size:12px; color:var(--text-tertiary); }
+        .comment-input { display:flex; gap:12px; padding:16px 0; position:sticky; bottom:0; background:var(--bg-primary); }
+        .comment-input .input { flex:1; }
+        .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:12px 24px; border:none; border-radius:12px; font-size:15px; font-weight:600; cursor:pointer; transition:all 0.3s; }
+        .btn-primary { background:linear-gradient(135deg,#007AFF,#5856D6); color:#fff; }
+        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(0,122,255,0.3); }
+        .btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+        .btn-sm { padding:8px 16px; font-size:13px; }
+        .post-card { background:var(--bg-card); border-radius:16px; padding:16px 20px; margin-bottom:16px; box-shadow:var(--shadow); border:1px solid var(--border-color); }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">🌿 Ecos</div>
+        <div class="nav-links"><a href="../index.html" style="color:var(--text-secondary);text-decoration:none;">← Volver</a></div>
+    </nav>
+
+    <div class="container" style="padding-bottom:100px;">
+        <div id="postContainer"><p style="text-align:center;padding:20px;">Cargando...</p></div>
+
+        <h3 style="margin-top:20px;">💬 Comentarios</h3>
+        <div id="commentsContainer">
+            <p style="text-align:center;color:var(--text-tertiary);padding:20px;">No hay comentarios aún</p>
+        </div>
+
+        <div class="comment-input">
+            <input type="text" class="input" id="commentInput" placeholder="Escribe un comentario..." maxlength="280">
+            <button class="btn btn-primary" id="commentBtn" disabled>💬</button>
+        </div>
+    </div>
+
+    <script type="importmap">{"imports":{"@supabase/supabase-js":"https://esm.sh/@supabase/supabase-js@2"}}</script>
+    <script type="module">
+        import { createClient } from '@supabase/supabase-js';
+        const supabaseAuth = createClient('https://ecos-auth.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtYXV0aCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY3LCJleHAiOjIwMzQ4MDU0Njd9.ejemploClaveAuth1234567890');
+        const supabaseContent = createClient('https://ecos-content.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtY29udGVudCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY4LCJleHAiOjIwMzQ4MDU0Njh9.ejemploClaveContent1234567890');
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const postId = urlParams.get('id');
+
+        const { data: { session } } = await supabaseAuth.auth.getSession();
+        if (!session) window.location.href = 'login.html';
+
+        // Cargar post
+        async function loadPost() {
+            const { data: post, error } = await supabaseContent.from('publicaciones').select('*').eq('id', postId).single();
+            if (error || !post) {
+                document.getElementById('postContainer').innerHTML = '<p style="color:var(--danger);">❌ Post no encontrado</p>';
+                return;
+            }
+
+            const isEco = post.tipo === 'eco';
+            document.getElementById('postContainer').innerHTML = `
+                <div class="post-card">
+                    <div class="post-header">
+                        <img class="post-avatar" src="https://ui-avatars.com/api/?name=U&background=007AFF&color=fff">
+                        <div><div class="post-user">Usuario</div><div class="post-username">${new Date(post.creado_en).toLocaleString()}</div></div>
+                    </div>
+                    ${post.titulo ? `<h2>${post.titulo}</h2>` : ''}
+                    <div class="post-content">${post.contenido || ''}</div>
+                    ${post.media_url ? (isEco ? `<video class="post-media" controls src="${post.media_url}"></video>` : `<img class="post-media" src="${post.media_url}">`) : ''}
+                    ${isEco ? '<span style="background:var(--primary-light);color:var(--primary);padding:2px 12px;border-radius:30px;font-size:12px;">🎬 Eco</span>' : ''}
+                    <div class="post-actions">
+                        <button onclick="likePost('${post.id}')">❤️ <span id="likes-${post.id}">${post.likes || 0}</span></button>
+                        <button>💬 ${post.comentarios || 0}</button>
+                    </div>
+                </div>
+            `;
+            loadComments();
+        }
+
+        // Cargar comentarios
+        async function loadComments() {
+            const { data: comments } = await supabaseContent.from('comentarios').select('*').eq('publicacion_id', postId).order('creado_en', { ascending: true });
+            const container = document.getElementById('commentsContainer');
+            if (!comments || comments.length === 0) {
+                container.innerHTML = '<p style="text-align:center;color:var(--text-tertiary);padding:20px;">💬 No hay comentarios aún. ¡Sé el primero!</p>';
+                return;
+            }
+            let html = '';
+            for (const c of comments) {
+                html += `
+                    <div class="comment-item">
+                        <img class="avatar" src="https://ui-avatars.com/api/?name=U&background=007AFF&color=fff">
+                        <div class="content">
+                            <div class="name">Usuario</div>
+                            <div class="text">${c.contenido}</div>
+                            <div class="time">${new Date(c.creado_en).toLocaleString()}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
+        loadPost();
+
+        // Comentar
+        const commentInput = document.getElementById('commentInput');
+        const commentBtn = document.getElementById('commentBtn');
+
+        commentInput.addEventListener('input', () => {
+            commentBtn.disabled = !commentInput.value.trim();
+        });
+
+        commentBtn.onclick = async () => {
+            const text = commentInput.value.trim();
+            if (!text) return;
+            commentBtn.disabled = true;
+            commentBtn.textContent = '⏳';
+            try {
+                const { error } = await supabaseContent.from('comentarios').insert([{
+                    publicacion_id: postId,
+                    usuario_id: session.user.id,
+                    contenido: text
+                }]);
+                if (error) throw new Error(error.message);
+                commentInput.value = '';
+                commentBtn.disabled = true;
+                commentBtn.textContent = '💬';
+                loadComments();
+            } catch (err) {
+                alert('❌ ' + err.message);
+                commentBtn.disabled = false;
+                commentBtn.textContent = '💬';
+            }
+        };
+
+        window.likePost = async (id) => {
+            alert('❤️ Función de like (próximamente)');
+        };
+    </script>
+</body>
+</html>

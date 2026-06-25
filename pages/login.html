@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecos - Iniciar Sesión</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        body { display:flex; align-items:center; justify-content:center; min-height:100vh; background:var(--bg-primary); padding:20px; }
+        .auth-container { max-width:400px; width:100%; }
+        .toggle-theme { position:fixed; top:20px; right:20px; z-index:100; }
+        .logo-big { font-size:64px; }
+        .social-btn { display:flex; align-items:center; justify-content:center; gap:12px; width:100%; padding:14px; border:2px solid var(--border-color); border-radius:12px; background:var(--bg-primary); color:var(--text-primary); font-size:16px; font-weight:600; cursor:pointer; transition:all 0.3s; margin-bottom:10px; }
+        .social-btn:hover { border-color:var(--primary); transform:translateY(-2px); }
+        .social-btn.google:hover { border-color:#EA4335; }
+        .divider { display:flex; align-items:center; gap:16px; color:var(--text-tertiary); font-size:13px; margin:20px 0; }
+        .divider hr { flex:1; border:none; border-top:1px solid var(--border-color); }
+        .switch-mode { margin-top:20px; color:var(--text-secondary); font-size:14px; }
+        .switch-mode a { color:var(--primary); font-weight:600; cursor:pointer; }
+        .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:14px 28px; border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer; transition:all 0.3s; }
+        .btn-primary { background:linear-gradient(135deg,#007AFF,#5856D6); color:#fff; }
+        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(0,122,255,0.3); }
+        .btn-block { width:100%; }
+        .input-group { margin-bottom:16px; }
+        .input-group label { display:block; font-weight:600; margin-bottom:6px; color:var(--text-secondary); font-size:14px; }
+        .input { width:100%; padding:14px 16px; border:2px solid var(--border-color); border-radius:12px; background:var(--bg-primary); color:var(--text-primary); font-size:15px; transition:all 0.3s; font-family:inherit; }
+        .input:focus { outline:none; border-color:#007AFF; box-shadow:0 0 0 4px rgba(0,122,255,0.15); }
+        .error-msg { background:rgba(255,59,48,0.1); color:#FF3B30; padding:12px 16px; border-radius:12px; margin-bottom:16px; display:none; font-size:14px; }
+        .success-msg { background:rgba(52,199,89,0.1); color:#34C759; padding:12px 16px; border-radius:12px; margin-bottom:16px; display:none; font-size:14px; }
+    </style>
+</head>
+<body>
+    <button class="toggle-theme btn btn-primary" id="themeToggle" style="padding:10px 14px;">🌙</button>
+
+    <div class="auth-container">
+        <div style="text-align:center;margin-bottom:32px;">
+            <div class="logo-big">🌿</div>
+            <h1 style="font-size:32px;font-weight:700;background:linear-gradient(135deg,#007AFF,#5856D6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Ecos</h1>
+            <p style="color:var(--text-tertiary);">Conecta con el mundo</p>
+        </div>
+
+        <div class="error-msg" id="errorMsg"></div>
+        <div class="success-msg" id="successMsg"></div>
+
+        <button class="social-btn google" id="googleBtn">
+            <span style="font-size:20px;">🟢</span> Continuar con Google
+        </button>
+
+        <div class="divider"><hr><span>o</span><hr></div>
+
+        <form id="authForm">
+            <div class="input-group">
+                <label>Correo electrónico</label>
+                <input type="email" class="input" id="emailInput" placeholder="tu@email.com" required>
+            </div>
+            <div class="input-group">
+                <label>Contraseña</label>
+                <input type="password" class="input" id="passwordInput" placeholder="••••••••" required minlength="6">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" id="submitBtn">Iniciar sesión</button>
+        </form>
+
+        <div class="switch-mode">
+            <span id="switchText">¿No tienes cuenta?</span>
+            <a id="switchLink">Regístrate</a>
+        </div>
+
+        <div style="text-align:center;margin-top:12px;">
+            <a id="forgotLink" style="color:var(--text-tertiary);font-size:13px;cursor:pointer;">¿Olvidaste tu contraseña?</a>
+        </div>
+    </div>
+
+    <script type="importmap">{"imports":{"@supabase/supabase-js":"https://esm.sh/@supabase/supabase-js@2"}}</script>
+    <script type="module">
+        import { createClient } from '@supabase/supabase-js';
+        
+        const supabase = createClient(
+            'https://ecos-auth.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtYXV0aCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY3LCJleHAiOjIwMzQ4MDU0Njd9.ejemploClaveAuth1234567890'
+        );
+
+        const form = document.getElementById('authForm');
+        const email = document.getElementById('emailInput');
+        const pass = document.getElementById('passwordInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const errorMsg = document.getElementById('errorMsg');
+        const successMsg = document.getElementById('successMsg');
+        const switchText = document.getElementById('switchText');
+        const switchLink = document.getElementById('switchLink');
+        const googleBtn = document.getElementById('googleBtn');
+        const forgotLink = document.getElementById('forgotLink');
+        const themeToggle = document.getElementById('themeToggle');
+
+        let isLogin = true;
+
+        // Tema oscuro
+        if (localStorage.getItem('theme') === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            themeToggle.textContent = '☀️';
+        }
+
+        themeToggle.onclick = () => {
+            const current = document.documentElement.getAttribute('data-theme');
+            if (current === 'dark') {
+                document.documentElement.removeAttribute('data-theme');
+                themeToggle.textContent = '🌙';
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                themeToggle.textContent = '☀️';
+                localStorage.setItem('theme', 'dark');
+            }
+        };
+
+        function showError(msg) {
+            errorMsg.textContent = msg;
+            errorMsg.style.display = 'block';
+            successMsg.style.display = 'none';
+        }
+
+        function showSuccess(msg) {
+            successMsg.textContent = msg;
+            successMsg.style.display = 'block';
+            errorMsg.style.display = 'none';
+        }
+
+        function updateUI() {
+            if (isLogin) {
+                document.querySelector('h1').textContent = 'Bienvenido';
+                submitBtn.textContent = 'Iniciar sesión';
+                switchText.textContent = '¿No tienes cuenta?';
+                switchLink.textContent = 'Regístrate';
+                document.querySelector('p').textContent = 'Inicia sesión para continuar';
+            } else {
+                document.querySelector('h1').textContent = 'Únete a Ecos';
+                submitBtn.textContent = 'Crear cuenta';
+                switchText.textContent = '¿Ya tienes cuenta?';
+                switchLink.textContent = 'Inicia sesión';
+                document.querySelector('p').textContent = 'Crea tu cuenta y empieza a compartir';
+            }
+        }

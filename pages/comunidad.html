@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecos - Comunidad</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .community-header { position:relative; margin-bottom:16px; }
+        .community-cover { width:100%; height:140px; background:linear-gradient(135deg,var(--primary),var(--secondary)); border-radius:16px; object-fit:cover; }
+        .community-avatar { width:72px; height:72px; border-radius:50%; border:4px solid var(--bg-card); margin-top:-36px; margin-left:20px; object-fit:cover; }
+        .community-info { padding:0 20px 16px; }
+        .community-name { font-size:22px; font-weight:700; }
+        .community-desc { color:var(--text-tertiary); font-size:14px; }
+        .community-stats { display:flex; gap:24px; margin:8px 0; }
+        .stat-number { font-weight:700; }
+        .stat-label { color:var(--text-tertiary); font-size:12px; }
+        .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:12px 24px; border:none; border-radius:12px; font-size:15px; font-weight:600; cursor:pointer; transition:all 0.3s; }
+        .btn-primary { background:linear-gradient(135deg,#007AFF,#5856D6); color:#fff; }
+        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(0,122,255,0.3); }
+        .btn-outline { background:transparent; border:2px solid var(--primary); color:var(--primary); }
+        .btn-outline:hover { background:var(--primary); color:#fff; }
+        .btn-block { width:100%; }
+        .post-card { background:var(--bg-card); border-radius:16px; padding:16px 20px; margin-bottom:16px; box-shadow:var(--shadow); border:1px solid var(--border-color); }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">🌿 Ecos</div>
+        <div class="nav-links"><a href="../index.html" style="color:var(--text-secondary);text-decoration:none;">← Volver</a></div>
+    </nav>
+
+    <div class="container" style="padding-bottom:80px;">
+        <div id="communityContainer"><p style="text-align:center;padding:20px;">Cargando...</p></div>
+        <div id="postsContainer"></div>
+    </div>
+
+    <script type="importmap">{"imports":{"@supabase/supabase-js":"https://esm.sh/@supabase/supabase-js@2"}}</script>
+    <script type="module">
+        import { createClient } from '@supabase/supabase-js';
+        const supabaseAuth = createClient('https://ecos-auth.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtYXV0aCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY3LCJleHAiOjIwMzQ4MDU0Njd9.ejemploClaveAuth1234567890');
+        const supabaseContent = createClient('https://ecos-content.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtY29udGVudCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY4LCJleHAiOjIwMzQ4MDU0Njh9.ejemploClaveContent1234567890');
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const comunidadId = urlParams.get('id');
+
+        const { data: { session } } = await supabaseAuth.auth.getSession();
+        if (!session) window.location.href = 'login.html';
+
+        async function loadCommunity() {
+            const { data: community, error } = await supabaseContent.from('comunidades').select('*').eq('id', comunidadId).single();
+            if (error || !community) {
+                document.getElementById('communityContainer').innerHTML = '<p style="color:var(--danger);">❌ Comunidad no encontrada</p>';
+                return;
+            }
+
+            document.getElementById('communityContainer').innerHTML = `
+                <div class="community-header">
+                    <img class="community-cover" src="${community.portada_url || 'https://picsum.photos/seed/'+community.id+'/600/200'}">
+                    <img class="community-avatar" src="${community.avatar_url || 'https://ui-avatars.com/api/?name='+community.nombre+'&background=5856D6&color=fff&size=72'}">
+                    <div class="community-info">
+                        <div class="community-name">🏛️ ${community.nombre}</div>
+                        <div class="community-desc">${community.descripcion || 'Sin descripción'}</div>
+                        <div class="community-stats">
+                            <div><span class="stat-number">${community.miembros || 0}</span> <span class="stat-label">miembros</span></div>
+                            <div><span class="stat-number">${community.posts || 0}</span> <span class="stat-label">publicaciones</span></div>
+                        </div>
+                        <button class="btn btn-primary btn-block" id="joinBtn">🔗 Unirse a la comunidad</button>
+                    </div>
+                </div>
+            `;
+
+            loadPosts();
+        }
+
+        async function loadPosts() {
+            const { data: posts } = await supabaseContent.from('publicaciones').select('*').eq('comunidad_id', comunidadId).order('creado_en', { ascending: false });
+            const container = document.getElementById('postsContainer');
+            if (!posts || posts.length === 0) {
+                container.innerHTML = '<p style="text-align:center;color:var(--text-tertiary);padding:20px;">📭 No hay publicaciones en esta comunidad</p>';
+                return;
+            }
+            let html = '';
+            for (const p of posts) {
+                const isEco = p.tipo === 'eco';
+                html += `
+                    <div class="post-card">
+                        <div class="post-header">
+                            <img class="post-avatar" src="https://ui-avatars.com/api/?name=U&background=007AFF&color=fff">
+                            <div><div class="post-user">Usuario</div><div class="post-username">${new Date(p.creado_en).toLocaleDateString()}</div></div>
+                        </div>
+                        ${p.titulo ? `<h3>${p.titulo}</h3>` : ''}
+                        <div class="post-content">${p.contenido || ''}</div>
+                        ${p.media_url ? (isEco ? `<video class="post-media" controls src="${p.media_url}"></video>` : `<img class="post-media" src="${p.media_url}">`) : ''}
+                        ${isEco ? '<span style="background:var(--primary-light);color:var(--primary);padding:2px 12px;border-radius:30px;font-size:12px;">🎬 Eco</span>' : ''}
+                        <div class="post-actions">
+                            <button>❤️ ${p.likes || 0}</button>
+                            <button onclick="window.location.href='post.html?id=${p.id}'">💬 ${p.comentarios || 0}</button>
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
+        loadCommunity();
+    </script>
+</body>
+</html>

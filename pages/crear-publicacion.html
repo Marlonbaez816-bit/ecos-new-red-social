@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecos - Publicar</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .preview-img { max-width:100%; border-radius:12px; margin:10px 0; max-height:300px; object-fit:cover; }
+        .char-counter { text-align:right; font-size:12px; color:var(--text-tertiary); }
+        .char-counter.limit { color:var(--danger); }
+        .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:14px 28px; border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer; transition:all 0.3s; }
+        .btn-primary { background:linear-gradient(135deg,#007AFF,#5856D6); color:#fff; }
+        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(0,122,255,0.3); }
+        .btn-block { width:100%; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">🌿 Ecos</div>
+        <div class="nav-links"><a href="../index.html" style="color:var(--text-secondary);text-decoration:none;">← Volver</a></div>
+    </nav>
+
+    <div class="container" style="max-width:500px;padding:20px 16px;">
+        <h2>📝 Nueva Publicación</h2>
+        <p style="color:var(--text-tertiary);margin-bottom:20px;">Comparte lo que piensas con la comunidad</p>
+
+        <form id="postForm">
+            <div class="input-group">
+                <label>Título (opcional)</label>
+                <input type="text" class="input" id="titulo" placeholder="Título de tu publicación" maxlength="100">
+            </div>
+
+            <div class="input-group">
+                <label>Contenido</label>
+                <textarea class="input" id="contenido" placeholder="¿Qué quieres compartir?" rows="5" required maxlength="500"></textarea>
+                <div class="char-counter" id="charCounter">0/500</div>
+            </div>
+
+            <div class="input-group">
+                <label>Imagen (opcional)</label>
+                <input type="file" class="input" id="imagenFile" accept="image/*" style="padding:8px;">
+                <div id="previewContainer"></div>
+            </div>
+
+            <div class="input-group">
+                <label>Comunidad (opcional)</label>
+                <select class="input" id="comunidadSelect">
+                    <option value="">Sin comunidad</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="submitBtn">📤 Publicar</button>
+        </form>
+        <div id="result" style="margin-top:16px;"></div>
+    </div>
+
+    <script type="importmap">{"imports":{"@supabase/supabase-js":"https://esm.sh/@supabase/supabase-js@2"}}</script>
+    <script type="module">
+        import { createClient } from '@supabase/supabase-js';
+        const supabaseAuth = createClient('https://ecos-auth.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtYXV0aCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY3LCJleHAiOjIwMzQ4MDU0Njd9.ejemploClaveAuth1234567890');
+        const supabaseContent = createClient('https://ecos-content.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtY29udGVudCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY4LCJleHAiOjIwMzQ4MDU0Njh9.ejemploClaveContent1234567890');
+
+        const form = document.getElementById('postForm');
+        const result = document.getElementById('result');
+        const submitBtn = document.getElementById('submitBtn');
+        const contenido = document.getElementById('contenido');
+        const charCounter = document.getElementById('charCounter');
+        const imagenFile = document.getElementById('imagenFile');
+        const previewContainer = document.getElementById('previewContainer');
+
+        contenido.addEventListener('input', () => {
+            const len = contenido.value.length;
+            charCounter.textContent = `${len}/500`;
+            charCounter.classList.toggle('limit', len > 450);
+        });
+
+        imagenFile.addEventListener('change', () => {
+            previewContainer.innerHTML = '';
+            if (imagenFile.files.length) {
+                const url = URL.createObjectURL(imagenFile.files[0]);
+                previewContainer.innerHTML = `<img class="preview-img" src="${url}">`;
+            }
+        });
+
+        const { data: { session } } = await supabaseAuth.auth.getSession();
+        if (!session) {
+            result.innerHTML = '<p style="color:var(--danger);">⚠️ Inicia sesión para publicar</p>';
+            submitBtn.disabled = true;
+        }
+
+        // Cargar comunidades
+        const { data: comunidades } = await supabaseContent.from('comunidades').select('id,nombre');
+        const select = document.getElementById('comunidadSelect');
+        if (comunidades) {
+            for (const c of comunidades) {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.nombre;
+                select.appendChild(opt);
+            }
+        }
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            if (!session) { alert('Inicia sesión primero'); return; }
+            const titulo = document.getElementById('titulo').value;
+            const contenidoVal = contenido.value;
+            const file = imagenFile.files[0];
+            const comunidadId = select.value;
+
+            if (!contenidoVal.trim()) {
+                result.innerHTML = '<p style="color:var(--danger);">Escribe algo para publicar</p>';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Publicando...';
+            result.innerHTML = '';
+
+            try {
+                let media_url = null;
+                if (file) {
+                    const fileName = `imagenes/${Date.now()}_${file.name}`;
+                    const { error: upErr } = await supabaseContent.storage.from('imagenes').upload(fileName, file);
+                    if (!upErr) {
+                        const { data: { publicUrl } } = supabaseContent.storage.from('imagenes').getPublicUrl(fileName);
+                        media_url = publicUrl;
+                    }
+                }
+
+                const postData = {
+                    usuario_id: session.user.id,
+                    titulo: titulo,
+                    contenido: contenidoVal,
+                    tipo: 'texto',
+                    media_url: media_url
+                };
+                if (comunidadId) postData.comunidad_id = comunidadId;
+
+                const { error: dbErr } = await supabaseContent.from('publicaciones').insert([postData]);
+                if (dbErr) throw new Error(dbErr.message);
+
+                result.innerHTML = '<div style="background:rgba(52,199,89,0.1);padding:16px;border-radius:12px;color:var(--success);">✅ ¡Publicación creada! <a href="../index.html" style="color:var(--primary);">Volver al feed</a></div>';
+                form.reset();
+                previewContainer.innerHTML = '';
+            } catch (err) {
+                result.innerHTML = `<p style="color:var(--danger);">❌ ${err.message}</p>`;
+            }
+            submitBtn.disabled = false;
+            submitBtn.textContent = '📤 Publicar';
+        };
+    </script>
+</body>
+</html>

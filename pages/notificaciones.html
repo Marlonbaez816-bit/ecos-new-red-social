@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecos - Notificaciones</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .notification-item { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border-color); transition:all 0.3s; cursor:pointer; }
+        .notification-item:hover { background:var(--bg-tertiary); }
+        .notification-item .icon { font-size:24px; }
+        .notification-item .content { flex:1; }
+        .notification-item .content .text { font-size:14px; }
+        .notification-item .content .time { font-size:12px; color:var(--text-tertiary); }
+        .notification-item .avatar { width:44px; height:44px; border-radius:50%; object-fit:cover; }
+        .notification-item.unread { background:var(--primary-light); border-left:4px solid var(--primary); }
+        .empty-state { text-align:center; padding:60px 20px; color:var(--text-tertiary); }
+        .empty-state .icon { font-size:64px; margin-bottom:16px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">🌿 Ecos</div>
+        <div class="nav-links"><a href="../index.html" style="color:var(--text-secondary);text-decoration:none;">← Volver</a></div>
+    </nav>
+
+    <div class="container">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 0;">
+            <h2>🔔 Notificaciones</h2>
+            <button id="markAllRead" style="background:none;border:none;color:var(--primary);font-weight:600;cursor:pointer;">Marcar todas como leídas</button>
+        </div>
+
+        <div id="notificationsContainer">
+            <div class="empty-state">
+                <div class="icon">🔔</div>
+                <p>No tienes notificaciones</p>
+                <p style="font-size:14px;">Cuando alguien interactúe contigo, aparecerá aquí</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">{"imports":{"@supabase/supabase-js":"https://esm.sh/@supabase/supabase-js@2"}}</script>
+    <script type="module">
+        import { createClient } from '@supabase/supabase-js';
+        const supabaseAuth = createClient('https://ecos-auth.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtYXV0aCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY3LCJleHAiOjIwMzQ4MDU0Njd9.ejemploClaveAuth1234567890');
+        const supabaseSocial = createClient('https://ecos-social.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3Mtc29jaWFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTkyMzQ1NjksImV4cCI6MjAzNDgwNTQ2OX0.ejemploClaveSocial1234567890');
+
+        const { data: { session } } = await supabaseAuth.auth.getSession();
+        if (!session) window.location.href = 'login.html';
+
+        const container = document.getElementById('notificationsContainer');
+
+        async function loadNotifications() {
+            const { data: notifs, error } = await supabaseSocial
+                .from('notificaciones')
+                .select('*')
+                .eq('usuario_id', session.user.id)
+                .order('creado_en', { ascending: false });
+
+            if (error || !notifs || notifs.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">🔔</div>
+                        <p>No tienes notificaciones</p>
+                        <p style="font-size:14px;">Cuando alguien interactúe contigo, aparecerá aquí</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            const icons = {
+                'like': '❤️',
+                'comentario': '💬',
+                'seguidor': '👤',
+                'mencion': '@',
+                'comunidad': '🏛️'
+            };
+
+            for (const n of notifs) {
+                const icon = icons[n.tipo] || '📌';
+                const isUnread = !n.leido;
+                html += `
+                    <div class="notification-item ${isUnread ? 'unread' : ''}" data-id="${n.id}">
+                        <div class="icon">${icon}</div>
+                        <div class="content">
+                            <div class="text">${n.contenido || 'Nueva notificación'}</div>
+                            <div class="time">${new Date(n.creado_en).toLocaleDateString()} ${new Date(n.creado_en).toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+
+            // Marcar como leídas al hacer clic
+            document.querySelectorAll('.notification-item').forEach(el => {
+                el.onclick = async () => {
+                    const id = el.dataset.id;
+                    await supabaseSocial.from('notificaciones').update({ leido: true }).eq('id', id);
+                    el.classList.remove('unread');
+                };
+            });
+        }
+
+        loadNotifications();
+
+        // Marcar todas como leídas
+        document.getElementById('markAllRead').onclick = async () => {
+            await supabaseSocial.from('notificaciones').update({ leido: true }).eq('usuario_id', session.user.id);
+            document.querySelectorAll('.notification-item').forEach(el => el.classList.remove('unread'));
+        };
+    </script>
+</body>
+</html>

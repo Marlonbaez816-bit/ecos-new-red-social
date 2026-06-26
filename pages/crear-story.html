@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecos - Crear Story</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .drop-zone { border:2px dashed var(--border-color); border-radius:16px; padding:40px; text-align:center; cursor:pointer; transition:all 0.3s; background:var(--bg-primary); }
+        .drop-zone:hover { border-color:var(--primary); background:var(--primary-light); }
+        .drop-zone.dragover { border-color:var(--primary); background:var(--primary-light); }
+        .preview-image { width:100%; border-radius:12px; margin:10px 0; max-height:400px; object-fit:cover; }
+        .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:14px 28px; border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer; transition:all 0.3s; }
+        .btn-primary { background:linear-gradient(135deg,#007AFF,#5856D6); color:#fff; }
+        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(0,122,255,0.3); }
+        .btn-block { width:100%; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">🌿 Ecos</div>
+        <div class="nav-links"><a href="../index.html" style="color:var(--text-secondary);text-decoration:none;">← Volver</a></div>
+    </nav>
+
+    <div class="container" style="max-width:500px;padding:20px 16px;">
+        <h2>📸 Crear Story</h2>
+        <p style="color:var(--text-tertiary);margin-bottom:20px;">Comparte un momento con tus seguidores</p>
+
+        <form id="storyForm">
+            <div class="input-group">
+                <label>Imagen o video</label>
+                <div class="drop-zone" id="dropZone">
+                    <div style="font-size:48px;">📸</div>
+                    <p style="margin:8px 0;">Arrastra o haz clic para subir</p>
+                    <p style="font-size:13px;color:var(--text-tertiary);">JPG, PNG, MP4 • Máx 10MB</p>
+                    <input type="file" id="mediaInput" accept="image/*,video/*" style="display:none;" required>
+                </div>
+                <div id="previewContainer"></div>
+                <div id="fileInfo" style="font-size:13px;color:var(--text-tertiary);margin-top:8px;"></div>
+            </div>
+
+            <div class="input-group">
+                <label>Texto (opcional)</label>
+                <input type="text" class="input" id="texto" placeholder="Acompaña tu story con un texto..." maxlength="100">
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="submitBtn">📤 Publicar Story</button>
+        </form>
+        <div id="result" style="margin-top:16px;"></div>
+    </div>
+
+    <script type="importmap">{"imports":{"@supabase/supabase-js":"https://esm.sh/@supabase/supabase-js@2"}}</script>
+    <script type="module">
+        import { createClient } from '@supabase/supabase-js';
+        const supabaseAuth = createClient('https://ecos-auth.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtYXV0aCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY3LCJleHAiOjIwMzQ4MDU0Njd9.ejemploClaveAuth1234567890');
+        const supabaseContent = createClient('https://ecos-content.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3MtY29udGVudCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE5MjM0NTY4LCJleHAiOjIwMzQ4MDU0Njh9.ejemploClaveContent1234567890');
+
+        const form = document.getElementById('storyForm');
+        const result = document.getElementById('result');
+        const submitBtn = document.getElementById('submitBtn');
+        const dropZone = document.getElementById('dropZone');
+        const mediaInput = document.getElementById('mediaInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const fileInfo = document.getElementById('fileInfo');
+
+        dropZone.addEventListener('click', () => mediaInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) mediaInput.files = e.dataTransfer.files;
+            handleFile(mediaInput.files[0]);
+        });
+
+        mediaInput.addEventListener('change', () => { if (mediaInput.files.length) handleFile(mediaInput.files[0]); });
+
+        function handleFile(file) {
+            if (!file) return;
+            if (file.size > 10 * 1024 * 1024) {
+                alert('❌ El archivo no puede superar los 10MB');
+                return;
+            }
+            const url = URL.createObjectURL(file);
+            const isVideo = file.type.startsWith('video/');
+            previewContainer.innerHTML = isVideo ? 
+                `<video class="preview-image" controls src="${url}"></video>` :
+                `<img class="preview-image" src="${url}">`;
+            dropZone.style.display = 'none';
+            fileInfo.textContent = `📎 ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
+        }
+
+        const { data: { session } } = await supabaseAuth.auth.getSession();
+        if (!session) {
+            result.innerHTML = '<p style="color:var(--danger);">⚠️ Inicia sesión para publicar</p>';
+            submitBtn.disabled = true;
+        }
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            if (!session) { alert('Inicia sesión primero'); return; }
+            const file = mediaInput.files[0];
+            const texto = document.getElementById('texto').value;
+
+            if (!file) { result.innerHTML = '<p style="color:var(--danger);">Selecciona un archivo</p>'; return; }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Subiendo...';
+            result.innerHTML = '';
+
+            try {
+                const isVideo = file.type.startsWith('video/');
+                const folder = isVideo ? 'stories-videos' : 'stories';
+                const fileName = `${folder}/${session.user.id}_${Date.now()}_${file.name}`;
+                const { error: upErr } = await supabaseContent.storage.from(folder).upload(fileName, file);
+                if (upErr) throw new Error(upErr.message);
+                const { data: { publicUrl } } = supabaseContent.storage.from(folder).getPublicUrl(fileName);
+
+                const { error: dbErr } = await supabaseContent.from('stories').insert([{
+                    usuario_id: session.user.id,
+                    media_url: publicUrl,
+                    texto: texto,
+                    tipo: isVideo ? 'video' : 'imagen'
+                }]);
+                if (dbErr) throw new Error(dbErr.message);
+
+                result.innerHTML = '<div style="background:rgba(52,199,89,0.1);padding:16px;border-radius:12px;color:var(--success);">✅ Story publicada! <a href="../index.html" style="color:var(--primary);">Volver al feed</a></div>';
+                form.reset();
+                dropZone.style.display = 'block';
+                previewContainer.innerHTML = '';
+                fileInfo.textContent = '';
+            } catch (err) {
+                result.innerHTML = `<p style="color:var(--danger);">❌ ${err.message}</p>`;
+            }
+            submitBtn.disabled = false;
+            submitBtn.textContent = '📤 Publicar Story';
+        };
+    </script>
+</body>
+</html>
